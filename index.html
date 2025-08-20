@@ -9,6 +9,8 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        
+        /* General body styling */
         body {
             font-family: 'Inter', sans-serif;
             background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
@@ -20,6 +22,8 @@
             margin: 0;
             overflow: hidden;
         }
+
+        /* Main application container */
         .app-container {
             background-color: rgba(18, 25, 33, 0.9);
             border-radius: 2rem;
@@ -33,6 +37,8 @@
             align-items: center;
             text-align: center;
         }
+
+        /* Canvas styling */
         canvas {
             display: block;
             border-radius: 1rem;
@@ -41,23 +47,60 @@
             cursor: pointer;
             transition: all 0.3s ease-in-out;
         }
+
         canvas:hover {
             transform: scale(1.01);
             box-shadow: 0 0 30px rgba(100, 255, 218, 0.6);
         }
+
+        /* Container to prevent layout shift when text changes */
         .text-container {
             min-height: 4rem;
         }
+        
+        /* Retro neon title effect */
         .neon-title {
             font-family: 'Press Start 2P', cursive;
-            text-shadow: 0 0 10px rgba(100, 255, 218, 0.8);
-            animation: neon-flicker 1.5s infinite alternate;
+            color: #64ffda; /* Base color for the neon text */
+            text-shadow: 0 0 5px #64ffda, 0 0 10px #64ffda, 0 0 20px #64ffda;
+            animation: neon-flicker 2s infinite alternate;
         }
+
         @keyframes neon-flicker {
-            0% { opacity: 1; text-shadow: 0 0 5px #64ffda; }
-            50% { opacity: 0.8; text-shadow: 0 0 10px #64ffda; }
-            100% { opacity: 1; text-shadow: 0 0 5px #64ffda; }
+            0%, 100% {
+                opacity: 1;
+                text-shadow: 0 0 5px #64ffda, 0 0 10px #64ffda, 0 0 20px #64ffda;
+            }
+            50% {
+                opacity: 0.8;
+                text-shadow: 0 0 10px #64ffda, 0 0 15px #64ffda;
+            }
         }
+
+        /* --- STYLES FOR STATUS TEXT --- */
+        /* Base styling for the status text with a smooth color transition */
+        #statusText {
+            transition: color 1.5s ease-in-out, text-shadow 1.5s ease-in-out;
+        }
+
+        /* Style for the 'Stable' state - NOW GOLDEN YELLOW */
+        .status-stable {
+            color: #fcd34d; /* Golden yellow to match the stable core */
+            text-shadow: 0 0 8px rgba(252, 211, 77, 0.7);
+        }
+
+        /* Style for the 'Critical' state */
+        .status-critical {
+            color: #ef4444; /* Red to match the dystopia glow */
+            text-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+        }
+        
+        /* Style for transitioning states */
+        .status-transition {
+            color: #f59e0b; /* A neutral amber for during transitions */
+            text-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+        }
+
     </style>
 </head>
 <body class="bg-gray-900 min-h-screen flex flex-col items-center justify-center text-white p-4">
@@ -70,7 +113,8 @@
             <canvas id="robotStomachCanvas" class="w-full h-full"></canvas>
         </div>
         
-        <div id="statusText" class="text-center text-2xl text-gray-300 text-container">
+        <!-- The status text element now starts with the 'status-stable' class -->
+        <div id="statusText" class="text-center text-2xl text-container status-stable">
             Frankie the SIMbot Status: Stable
         </div>
     </div>
@@ -83,15 +127,15 @@
         
         // Animation state
         const state = {
-            mode: 'utopia',
+            mode: 'utopia', // 'utopia', 'dystopia', 'transition-to-dystopia', 'transition-to-utopia'
             transitionStartTime: 0,
-            transitionDuration: 1500,
+            transitionDuration: 1500, // 1.5 seconds for transitions
             touchX: 0,
             touchY: 0,
             particles: []
         };
 
-        // Particle class for managing particle effects
+        // Particle class for managing particle effects on click
         class Particle {
             constructor(x, y, vx, vy, color, life) {
                 this.x = x;
@@ -110,10 +154,12 @@
             }
 
             draw() {
+                // Fade out the particle as its life decreases
                 const opacity = this.life / this.initialLife;
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+                // A safer way to create RGBA color strings
                 ctx.fillStyle = this.color.replace(')', `, ${opacity})`).replace('rgb', 'rgba');
                 ctx.fill();
                 ctx.restore();
@@ -123,16 +169,20 @@
         // Function to set the canvas size and scale it for high-DPI screens
         function resizeCanvas() {
             const container = canvas.parentElement;
-            canvas.width = container.clientWidth * window.devicePixelRatio;
-            canvas.height = container.clientHeight * window.devicePixelRatio;
-            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-            draw();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = container.clientWidth * dpr;
+            canvas.height = container.clientHeight * dpr;
+            ctx.scale(dpr, dpr);
+            // Redraw immediately after resizing
+            draw(true); 
         }
 
         // Add event listeners for resizing and touch/click events
         window.addEventListener('resize', resizeCanvas);
-        window.addEventListener('load', resizeCanvas);
         canvas.addEventListener('click', (event) => {
+            // Prevent starting a new transition while one is already in progress
+            if (state.mode.startsWith('transition')) return;
+
             const rect = canvas.getBoundingClientRect();
             state.touchX = event.clientX - rect.left;
             state.touchY = event.clientY - rect.top;
@@ -151,227 +201,243 @@
         // Function to create and add particles to the state
         function createTransitionParticles(x, y, mode) {
             const particleCount = 100;
-            let particleColor;
-            let vx, vy;
-
             for (let i = 0; i < particleCount; i++) {
+                let particleColor, vx, vy;
+                const particleLife = Math.floor(Math.random() * 50) + 50;
+
                 if (mode === 'transition-to-dystopia') {
                     particleColor = Math.random() > 0.5 ? 'rgb(255, 50, 50)' : 'rgb(180, 240, 20)';
-                    vx = (Math.random() - 0.5) * 5;
+                    vx = (Math.random() - 0.5) * 5; // Explosive, chaotic movement
                     vy = (Math.random() - 0.5) * 5;
-                } else {
+                } else { // transition-to-utopia
                     particleColor = Math.random() > 0.5 ? 'rgb(100, 255, 218)' : 'rgb(252, 211, 77)';
                     const angle = Math.random() * Math.PI * 2;
-                    vx = Math.cos(angle) * (Math.random() * 3 + 1);
+                    vx = Math.cos(angle) * (Math.random() * 3 + 1); // Orderly, outward movement
                     vy = Math.sin(angle) * (Math.random() * 3 + 1);
                 }
                 
-                const particleLife = Math.floor(Math.random() * 50) + 50;
                 state.particles.push(new Particle(x, y, vx, vy, particleColor, particleLife));
             }
         }
         
-        // Function to update the status text element
+        /**
+         * Updates the status text and its color based on the current state.
+         * It now manipulates CSS classes for styling.
+         */
         function updateStatusText() {
+            // Clear existing status classes
+            statusTextElement.classList.remove('status-stable', 'status-critical', 'status-transition');
+
             if (state.mode === 'utopia') {
                 statusTextElement.innerText = "Frankie the SIMbot Status: Stable";
+                statusTextElement.classList.add('status-stable');
             } else if (state.mode === 'dystopia') {
                 statusTextElement.innerText = "Frankie the SIMbot Status: Critical";
+                statusTextElement.classList.add('status-critical');
             } else if (state.mode === 'transition-to-dystopia') {
                 statusTextElement.innerText = "Initiating Dystopian Protocol...";
+                statusTextElement.classList.add('status-transition');
             } else if (state.mode === 'transition-to-utopia') {
                 statusTextElement.innerText = "Repairing Core Systems...";
+                statusTextElement.classList.add('status-transition');
             }
         }
 
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Helper function to interpolate between two colors
+        function lerpColor(colorA, colorB, amount) {
+            const [rA, gA, bA] = colorA;
+            const [rB, gB, bB] = colorB;
+            const r = Math.round(rA + (rB - rA) * amount);
+            const g = Math.round(gA + (gB - gA) * amount);
+            const b = Math.round(bA + (bB - bA) * amount);
+            return [r, g, b];
+        }
+
+        // Main drawing function, now with slightly better organization
+        function draw(isResize = false) {
             const time = Date.now();
-            const centerX = canvas.width / (2 * window.devicePixelRatio);
-            const centerY = canvas.height / (2 * window.devicePixelRatio);
+            const clientWidth = canvas.clientWidth;
+            const clientHeight = canvas.clientHeight;
+            
+            ctx.clearRect(0, 0, clientWidth, clientHeight);
+            
+            const centerX = clientWidth / 2;
+            const centerY = clientHeight / 2;
             const baseSize = Math.min(centerX, centerY) * 0.8;
 
-            let pulse, rotationSpeed, outerColor, outerGlowColor, innerColor, innerGlowColor, bladeColor, fluidColor;
-            let currentMode = state.mode;
+            // --- Define Color Palettes ---
+            const utopiaColors = {
+                outerGlow: [100, 255, 218],
+                innerGlow: [252, 211, 77],
+                blade: [100, 255, 218],
+                outerShell: '#2d3748',
+                ripple: '252, 211, 77' // Golden yellow for the utopia ripple
+            };
+            const dystopiaColors = {
+                outerGlow: [239, 68, 68],
+                innerGlow: [255, 0, 0],
+                blade: [180, 240, 20],
+                outerShell: '#1f2937',
+                ripple: '255, 50, 50' // Red for the dystopia ripple
+            };
 
+            let pulse, rotationSpeed, outerColor, outerGlowColor, innerGlowColor, bladeColor, fluidColor;
+
+            // --- State-based Animation Logic ---
+            let currentMode = state.mode;
             if (state.mode.startsWith('transition')) {
                 const elapsed = time - state.transitionStartTime;
-                const progress = elapsed / state.transitionDuration;
-                
-                if (progress >= 1) {
+                const progress = Math.min(elapsed / state.transitionDuration, 1);
+
+                if (progress >= 1 && !isResize) {
                     currentMode = state.mode.endsWith('dystopia') ? 'dystopia' : 'utopia';
                     state.mode = currentMode;
                     updateStatusText();
                 }
-            }
-
-            if (currentMode === 'utopia') {
-                pulse = Math.sin(time / 1000) * 0.5 + 0.5;
-                rotationSpeed = time / 2000;
-                outerColor = '#2d3748';
-                outerGlowColor = `rgba(100, 255, 218, ${0.5 + pulse * 0.5})`;
-                innerColor = `rgba(252, 211, 77, ${0.8 + pulse * 0.2})`;
-                innerGlowColor = `rgba(252, 211, 77, ${0.8 + pulse * 0.2})`;
-                bladeColor = `rgba(100, 255, 218, ${0.8 + pulse * 0.2})`;
-                fluidColor = `rgba(100, 255, 218, ${0.3 + pulse * 0.3})`;
-            } else if (currentMode === 'dystopia') {
-                pulse = Math.random() * 0.2 + 0.8;
-                rotationSpeed = time / 500;
-                outerColor = '#1f2937';
-                outerGlowColor = `rgba(239, 68, 68, ${0.7 + Math.random() * 0.3})`;
-                innerColor = `rgba(255, 0, 0, ${0.8 + pulse * 0.2})`;
-                innerGlowColor = `rgba(255, 0, 0, ${0.8 + pulse * 0.2})`;
-                bladeColor = `rgba(180, 240, 20, ${0.5 + Math.random() * 0.5})`;
-                fluidColor = `rgba(239, 68, 68, ${0.3 + pulse * 0.3})`;
-            } else if (state.mode === 'transition-to-dystopia') {
-                const elapsed = time - state.transitionStartTime;
-                const progress = elapsed / state.transitionDuration;
                 
+                const fromColors = state.mode === 'transition-to-dystopia' ? utopiaColors : dystopiaColors;
+                const toColors = state.mode === 'transition-to-dystopia' ? dystopiaColors : utopiaColors;
+
                 const utopiaPulse = Math.sin(time / 1000) * 0.5 + 0.5;
                 const dystopiaPulse = Math.random() * 0.2 + 0.8;
                 pulse = utopiaPulse * (1 - progress) + dystopiaPulse * progress;
-                rotationSpeed = (time / 2000) * (1 - progress) + (time / 100) * progress;
-
-                const r = Math.round(100 * (1 - progress) + 239 * progress);
-                const g = Math.round(255 * (1 - progress) + 68 * progress);
-                const b = Math.round(218 * (1 - progress) + 68 * progress);
-                outerGlowColor = `rgba(${r}, ${g}, ${b}, ${0.5 + pulse * 0.5})`;
                 
-                const innerR = Math.round(252 * (1 - progress) + 255 * progress);
-                const innerG = Math.round(211 * (1 - progress) + 0 * progress);
-                const innerB = Math.round(77 * (1 - progress) + 0 * progress);
-                innerGlowColor = `rgba(${innerR}, ${innerG}, ${innerB}, ${0.8 + pulse * 0.2})`;
-
-                outerColor = '#1f2937';
-                innerColor = '#ff0000';
-                bladeColor = '#b4f014';
+                const utopiaSpeed = time / 2000;
+                const dystopiaSpeed = time / 500;
+                rotationSpeed = state.mode === 'transition-to-dystopia' 
+                    ? utopiaSpeed * (1 - progress) + dystopiaSpeed * progress
+                    : dystopiaSpeed * (1 - progress) + utopiaSpeed * progress;
+                
+                const glowRGB = lerpColor(fromColors.outerGlow, toColors.outerGlow, progress);
+                const innerRGB = lerpColor(fromColors.innerGlow, toColors.innerGlow, progress);
+                const bladeRGB = lerpColor(fromColors.blade, toColors.blade, progress);
+                
+                outerGlowColor = `rgba(${glowRGB[0]}, ${glowRGB[1]}, ${glowRGB[2]}, ${0.7 + pulse * 0.3})`;
+                innerGlowColor = `rgba(${innerRGB[0]}, ${innerRGB[1]}, ${innerRGB[2]}, ${0.8 + pulse * 0.2})`;
+                bladeColor = `rgba(${bladeRGB[0]}, ${bladeRGB[1]}, ${bladeRGB[2]}, ${0.8 + pulse * 0.2})`;
+                outerColor = progress < 0.5 ? fromColors.outerShell : toColors.outerShell;
                 fluidColor = outerGlowColor;
 
+                // Add glitch effect during transition
                 if (Math.random() < 0.2) {
-                    ctx.filter = `blur(${Math.random() * 3}px) hue-rotate(${Math.random() * 360}deg)`;
+                    ctx.filter = `blur(${Math.random() * 3}px)`;
+                }
+                
+                // --- MULTIPLE RIPPLE EFFECT ---
+                const rippleCount = 3;
+                const rippleColor = state.mode === 'transition-to-dystopia' ? dystopiaColors.ripple : utopiaColors.ripple;
+                
+                for (let i = 0; i < rippleCount; i++) {
+                    // Stagger the start of each ripple
+                    const rippleProgress = Math.max(0, progress - i * 0.1);
+                    if (rippleProgress > 0) {
+                        const rippleRadius = rippleProgress * baseSize * 1.5;
+                        const opacity = 1 - rippleProgress;
+                        const lineWidth = 10 * (1 - rippleProgress);
+
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(state.touchX, state.touchY, rippleRadius, 0, Math.PI * 2);
+                        ctx.strokeStyle = `rgba(${rippleColor}, ${opacity})`;
+                        ctx.lineWidth = lineWidth;
+                        ctx.stroke();
+                        ctx.restore();
+                    }
                 }
 
-                const rippleRadius = progress * baseSize * 2;
-                ctx.beginPath();
-                ctx.arc(state.touchX, state.touchY, rippleRadius, 0, Math.PI * 2);
-                ctx.strokeStyle = `rgba(255, 50, 50, ${1 - progress})`;
-                ctx.lineWidth = 10;
-                ctx.stroke();
-
-            } else if (state.mode === 'transition-to-utopia') {
-                const elapsed = time - state.transitionStartTime;
-                const progress = elapsed / state.transitionDuration;
-
-                const utopiaPulse = Math.sin(time / 1000) * 0.5 + 0.5;
-                const dystopiaPulse = Math.random() * 0.2 + 0.8;
-                pulse = dystopiaPulse * (1 - progress) + utopiaPulse * progress;
-                rotationSpeed = (time / 500) * (1 - progress) + (time / 2000) * progress;
-                
-                const r = Math.round(239 * (1 - progress) + 100 * progress);
-                const g = Math.round(68 * (1 - progress) + 255 * progress);
-                const b = Math.round(68 * (1 - progress) + 218 * progress);
-                outerGlowColor = `rgba(${r}, ${g}, ${b}, ${0.7 + pulse * 0.3})`;
-                
-                const innerR = Math.round(255 * (1 - progress) + 252 * progress);
-                const innerG = Math.round(0 * (1 - progress) + 211 * progress);
-                const innerB = Math.round(0 * (1 - progress) + 77 * progress);
-                innerGlowColor = `rgba(${innerR}, ${innerG}, ${innerB}, ${0.8 + pulse * 0.2})`;
-
-                outerColor = '#2d3748';
-                innerColor = '#fcd34d';
-                bladeColor = '#64ffda';
-                fluidColor = outerGlowColor;
+            } else if (currentMode === 'utopia') {
+                pulse = Math.sin(time / 1000) * 0.5 + 0.5;
+                rotationSpeed = time / 2000;
+                outerColor = utopiaColors.outerShell;
+                outerGlowColor = `rgba(${utopiaColors.outerGlow.join(',')}, ${0.5 + pulse * 0.5})`;
+                innerGlowColor = `rgba(${utopiaColors.innerGlow.join(',')}, ${0.8 + pulse * 0.2})`;
+                bladeColor = `rgba(${utopiaColors.blade.join(',')}, ${0.8 + pulse * 0.2})`;
+                fluidColor = `rgba(${utopiaColors.outerGlow.join(',')}, ${0.3 + pulse * 0.3})`;
+            } else { // dystopia
+                pulse = Math.random() * 0.2 + 0.8;
+                rotationSpeed = time / 500;
+                outerColor = dystopiaColors.outerShell;
+                outerGlowColor = `rgba(${dystopiaColors.outerGlow.join(',')}, ${0.7 + Math.random() * 0.3})`;
+                innerGlowColor = `rgba(${dystopiaColors.innerGlow.join(',')}, ${0.8 + pulse * 0.2})`;
+                bladeColor = `rgba(${dystopiaColors.blade.join(',')}, ${0.5 + Math.random() * 0.5})`;
+                fluidColor = `rgba(${dystopiaColors.outerGlow.join(',')}, ${0.3 + pulse * 0.3})`;
             }
 
-            // ---- Outer Stomach Shell ----
+            // --- Drawing Section ---
+
+            // Outer Shell
+            ctx.save();
             ctx.beginPath();
             const outerRadius = baseSize * 0.9;
             ctx.moveTo(centerX - outerRadius, centerY);
-            ctx.bezierCurveTo(
-                centerX - outerRadius, centerY - outerRadius,
-                centerX + outerRadius, centerY - outerRadius,
-                centerX + outerRadius, centerY
-            );
-            ctx.bezierCurveTo(
-                centerX + outerRadius, centerY + outerRadius,
-                centerX - outerRadius, centerY + outerRadius,
-                centerX - outerRadius, centerY
-            );
+            ctx.bezierCurveTo(centerX - outerRadius, centerY - outerRadius, centerX + outerRadius, centerY - outerRadius, centerX + outerRadius, centerY);
+            ctx.bezierCurveTo(centerX + outerRadius, centerY + outerRadius, centerX - outerRadius, centerY + outerRadius, centerX - outerRadius, centerY);
             ctx.closePath();
             ctx.fillStyle = outerColor;
             ctx.fill();
-            
             ctx.shadowColor = outerGlowColor;
             ctx.shadowBlur = 20 + pulse * 15;
             ctx.strokeStyle = outerGlowColor;
             ctx.lineWidth = 5;
             ctx.stroke();
-            
-            ctx.shadowBlur = 0;
+            ctx.restore();
             ctx.filter = 'none';
 
-            // ---- Inner Energy Core ----
+            // Inner Energy Core
+            ctx.save();
             ctx.beginPath();
             const coreRadius = baseSize * 0.3;
             ctx.arc(centerX, centerY, coreRadius, 0, Math.PI * 2);
-            ctx.fillStyle = innerColor;
-            ctx.fill();
-            
+            ctx.fillStyle = innerGlowColor;
             ctx.shadowColor = innerGlowColor;
             ctx.shadowBlur = 10 + pulse * 10;
             ctx.fill();
-            ctx.shadowBlur = 0;
+            ctx.restore();
 
-            // ---- Inner Turbine Blades ----
+            // Inner Turbine Blades
+            ctx.save();
             const bladeCount = 6;
-            const rotation = rotationSpeed % (Math.PI * 2);
             for (let i = 0; i < bladeCount; i++) {
                 ctx.beginPath();
-                const angle = (i * (Math.PI * 2) / bladeCount) + rotation;
-                const innerBladeRadius = coreRadius * 0.8;
-                const outerBladeRadius = coreRadius * 1.5;
-                
-                const startX = centerX + innerBladeRadius * Math.cos(angle);
-                const startY = centerY + innerBladeRadius * Math.sin(angle);
-                const endX = centerX + outerBladeRadius * Math.cos(angle);
-                const endY = centerY + outerBladeRadius * Math.sin(angle);
-
-                ctx.moveTo(startX, startY);
-                ctx.lineTo(endX, endY);
+                const angle = (i * (Math.PI * 2) / bladeCount) + rotationSpeed;
+                ctx.moveTo(centerX + coreRadius * 0.8 * Math.cos(angle), centerY + coreRadius * 0.8 * Math.sin(angle));
+                ctx.lineTo(centerX + coreRadius * 1.5 * Math.cos(angle), centerY + coreRadius * 1.5 * Math.sin(angle));
                 ctx.strokeStyle = bladeColor;
                 ctx.lineWidth = 3;
                 ctx.stroke();
             }
+            ctx.restore();
 
-            // ---- Animated Stomach "Fluid" (Arcs) ----
+            // Animated "Fluid" Arcs
+            ctx.save();
             const fluidCount = 4;
-            const fluidRotation = (time / 10000) % (Math.PI * 2);
+            const fluidRotation = time / 10000;
             ctx.lineWidth = 2;
             for (let i = 0; i < fluidCount; i++) {
                 ctx.beginPath();
                 const arcRadius = baseSize * 0.5 + i * 15;
                 const startAngle = (i * Math.PI / 2) + fluidRotation;
-                const endAngle = startAngle + Math.PI / 4;
-                ctx.arc(centerX, centerY, arcRadius, startAngle, endAngle);
+                ctx.arc(centerX, centerY, arcRadius, startAngle, startAngle + Math.PI / 4);
                 ctx.strokeStyle = fluidColor;
                 ctx.stroke();
             }
+            ctx.restore();
 
-            // ---- Particle System ----
+            // Particle System
             state.particles = state.particles.filter(p => p.life > 0);
             for (const particle of state.particles) {
                 particle.update();
                 particle.draw();
             }
             
-            requestAnimationFrame(draw);
+            requestAnimationFrame(() => draw(false));
         }
 
-        // Start the animation loop when the window loads
+        // Initialize the application when the window loads
         window.onload = function() {
             resizeCanvas();
             updateStatusText();
-            draw();
+            // The first call to draw is now handled by resizeCanvas
         };
     </script>
 </body>
